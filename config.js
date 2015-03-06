@@ -1,6 +1,5 @@
 'use strict';
 var defaultConfig = {
-  defaultLanguage: 'en',
   // DEFAULT network (livenet or testnet)
   networkName: 'testnet',
   logLevel: 'info',
