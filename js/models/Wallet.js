@@ -33,6 +33,16 @@ var copayConfig = require('../../config');
 var TX_MAX_INS = 70;
 
 
+var staticInsightInstances = {};
+
+function getInsightInstance(networkOpts) {
+    var networkName = networkOpts.url;
+    if (networkName in staticInsightInstances)
+        return staticInsightInstances[networkName];
+    return staticInsightInstances[networkName] = Wallet._newInsight(networkOpts);
+}
+
+
 /**
  * @desc
  * Wallet manages a private key for Copay, network and blockchain information.
@@ -69,7 +79,7 @@ function Wallet(opts) {
   preconditions.checkState((opts.network && opts.blockchain) || networkName);
 
   opts.network = opts.network || Wallet._newAsync(opts.networkOpts[networkName]);
-  opts.blockchain = opts.blockchain || Wallet._newInsight(opts.blockchainOpts[networkName]);;
+  opts.blockchain = getInsightInstance(opts.blockchainOpts[networkName]);
   this.httpUtil = opts.httpUtil || httpUtil;
 
   //required params

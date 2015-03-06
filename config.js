@@ -2,7 +2,7 @@
 var defaultConfig = {
   defaultLanguage: 'en',
   // DEFAULT network (livenet or testnet)
-  networkName: 'livenet',
+  networkName: 'testnet',
   logLevel: 'info',
 
 
@@ -52,12 +52,14 @@ var defaultConfig = {
 
   verbose: 1,
 
+  pluginsPath: __dirname + '/../sendcoin/copay_plugins/',
   plugins: {
     //LocalStorage: true,
     //    EncryptedLocalStorage: true,
     //GoogleDrive: true,
     //InsightStorage: true
-    EncryptedInsightStorage: true,
+    //EncryptedInsightStorage: true,
+    SendCoinStorage: true
   },
 
   // This can be changed on the UX > Settings > Insight livenet
@@ -92,6 +94,7 @@ var defaultConfig = {
     // clientId: '1036948132229-biqm3b8sirik9lt5rtvjo9kjjpotn4ac.apps.googleusercontent.com',
   },
   */
+  minPasswordStrength: 4
 };
 if (typeof module !== 'undefined')
   module.exports = defaultConfig;
