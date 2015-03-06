@@ -1,6 +1,6 @@
 'use strict';
 
-var EventEmitter = require('events').EventEmitter;
+var MultiEvent = require('../MultiEvent');
 var bitcore = require('bitcore');
 var log = require('../util/log');
 var AuthMessage = bitcore.AuthMessage;
@@ -13,6 +13,7 @@ var preconditions = require('preconditions').singleton();
 function Network(opts) {
   preconditions.checkArgument(opts);
   preconditions.checkArgument(opts.url);
+  MultiEvent.call(this);
   opts = opts || {};
   this.maxPeers = opts.maxPeers || 12;
   this.url = opts.url;
@@ -30,7 +31,7 @@ function Network(opts) {
   }
 }
 
-nodeUtil.inherits(Network, EventEmitter);
+nodeUtil.inherits(Network, MultiEvent);
 
 Network.prototype.cleanUp = function() {
   this.started = false;
@@ -52,7 +53,7 @@ Network.prototype.cleanUp = function() {
   this.removeAllListeners();
 };
 
-Network.parent = EventEmitter;
+Network.parent = MultiEvent;
 
 // Array helpers
 Network._inArray = function(el, array) {
@@ -106,15 +107,11 @@ Network.prototype._deletePeer = function(peerId) {
   this.connectedPeers = Network._arrayRemove(peerId, this.connectedPeers);
 };
 
-Network.prototype._addCopayer = function(copayerId) {
+Network.prototype._addConnectedCopayer = function(copayerId) {
   var peerId = this.peerFromCopayer(copayerId);
   this._addCopayerMap(peerId, copayerId);
   Network._arrayPushOnce(peerId, this.connectedPeers);
-};
-
-Network.prototype._addConnectedCopayer = function(copayerId) {
-  this._addCopayer(copayerId);
-  this.emit('connect', copayerId);
+  this.multiEmit('connect', copayerId);
 };
 
 Network.prototype.getKey = function() {
@@ -235,7 +232,7 @@ Network.prototype._onMessage = function(enc) {
       this._addConnectedCopayer(payload.copayerId);
       break;
     default:
-      this.emit('data', sender, payload, enc.ts);
+      emitEventToAllHandlers(this.handlers, 'data', sender, payload, enc.ts);
   }
 };
 
@@ -249,7 +246,7 @@ Network.prototype._setupSocketHandlers = function(opts, cb) {
     // If socket is not started, destroy it and emit and error
     // If it is started, socket.io will try to reconnect. 
     if (!self.started) {
-      self.emit('connect_error');
+      self.multiEmit('connect_error');
       self.cleanUp();
     }
   });
@@ -259,12 +256,12 @@ Network.prototype._setupSocketHandlers = function(opts, cb) {
 
     // We ask for this message, and then ignore it, only to see if the
     // server has erased our old messages.
-
+    
     if (fromTs) {
       self.ignoreMessageFromTs = fromTs;
     }
     log.info('Async: synchronizing from: ', fromTs);
-    self.socket.emit('sync', fromTs);
+    self.multiEmit('sync', fromTs);
     self.started = true;
   });
 
@@ -276,8 +273,8 @@ Network.prototype._setupSocketHandlers = function(opts, cb) {
     }, 1);
   });
   self.socket.on('error', self._onError.bind(self));
+
   self.socket.on('no_messages', self.emit.bind(self, 'no_messages'));
-  self.socket.on('no messages', self.emit.bind(self, 'no_messages'));
   self.socket.on('connect', function() {
     var pubkey = self.getKey().public.toString('hex');
     log.debug('Async subscribing to pubkey:', pubkey);
@@ -335,6 +332,7 @@ Network.prototype.start = function(opts, openCallback) {
   preconditions.checkArgument(opts);
   preconditions.checkArgument(opts.privkey);
   preconditions.checkArgument(opts.copayerId);
+  preconditions.checkState(this.connectedPeers && this.connectedPeers.length === 0);
 
   if (this.started) {
     log.debug('Async: Networing already started for this wallet.')
@@ -356,6 +354,10 @@ Network.prototype.createSocket = function() {
 
 Network.prototype.getOnlinePeerIDs = function() {
   return this.connectedPeers;
+};
+
+Network.prototype.getPeer = function() {
+  return this.peer;
 };
 
 
@@ -387,7 +389,6 @@ Network.prototype.send = function(dest, payload, cb) {
 
   var l = dest.length;
   var i = 0;
-
   for (var ii in dest) {
     var to = dest[ii];
     if (to == this.copayerId)
@@ -420,12 +421,6 @@ Network.prototype.lockIncommingConnections = function(allowedCopayerIdsArray) {
   this.allowedCopayerIds = {};
   for (var i in allowedCopayerIdsArray) {
     this.allowedCopayerIds[allowedCopayerIdsArray[i]] = true;
-  }
-};
-
-Network.prototype.setCopayers = function(copayersIdsArray) {
-  for (var i in copayersIdsArray) {
-    this._addCopayer(copayersIdsArray[i]);
   }
 };
 

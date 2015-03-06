@@ -5,7 +5,7 @@ var async = require('async');
 var request = require('request');
 var io = require('socket.io-client');
 var _ = require('lodash');
-var EventEmitter = require('events').EventEmitter;
+var MultiEvent = require('../MultiEvent');
 var preconditions = require('preconditions').singleton();
 
 var bitcore = require('bitcore');
@@ -14,8 +14,8 @@ var log = require('../util/log.js');
 
 
 /*
-  This class lets interface with the blockchain, making general queries and
-  subscribing to transactions on addresses and blocks.
+  This class lets interfaces with the blockchain, making general queries and
+  subscribing to transactions on adressess and blocks.
 
   Opts: 
     - url
@@ -33,6 +33,8 @@ var Insight = function(opts) {
   preconditions.checkArgument(opts)
     .shouldBeObject(opts)
     .checkArgument(opts.url)
+
+  MultiEvent.call(this);
 
   this.status = this.STATUS.DISCONNECTED;
   this.subscribed = {};
@@ -105,7 +107,7 @@ Insight.setCompleteUrl = function(uri) {
   return newUri;
 }
 
-util.inherits(Insight, EventEmitter);
+util.inherits(Insight, MultiEvent);
 
 Insight.prototype.STATUS = {
   CONNECTED: 'connected',
@@ -120,7 +122,7 @@ Insight.prototype.subscribeToBlocks = function() {
 
   var self = this;
   socket.on('block', function(blockHash) {
-    self.emit('block', blockHash);
+    self.multiEmit('block', blockHash);
   });
   this.listeningBlocks = true;
 }
@@ -138,24 +140,24 @@ Insight.prototype._setMainHandlers = function(url, opts) {
   this.socket.on('connect', function() {
     self.status = self.STATUS.CONNECTED;
     self.subscribeToBlocks();
-    self.emit('connect', 0);
+    self.multiEmit('connect', 0);
   });
 
   this.socket.on('connect_error', function() {
     if (self.status != self.STATUS.CONNECTED) return;
     self.status = self.STATUS.DISCONNECTED;
-    self.emit('disconnect');
+    self.multiEmit('disconnect');
   });
 
   this.socket.on('connect_timeout', function() {
     if (self.status != self.STATUS.CONNECTED) return;
     self.status = self.STATUS.DISCONNECTED;
-    self.emit('disconnect');
+    self.multiEmit('disconnect');
   });
 
   this.socket.on('reconnect', function(attempt) {
     if (self.status != self.STATUS.DISCONNECTED) return;
-    self.emit('reconnect', attempt);
+    self.multiEmit('reconnect', attempt);
     self.reSubscribe();
     self.status = self.STATUS.CONNECTED;
   });
@@ -207,7 +209,7 @@ Insight.prototype.subscribe = function(addresses) {
       // verify the address is still subscribed
       if (!self.subscribed[address]) return;
 
-      self.emit('tx', {
+      self.multiEmit('tx', {
         address: address,
         txid: txid
       });

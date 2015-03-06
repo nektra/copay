@@ -918,22 +918,24 @@ Wallet.prototype._setupBlockchainHandlers = function() {
   self.subscribeToAddresses();
 
   log.debug('Setting Blockchain listeners for', this.getName());
-  self.blockchain.on('reconnect', function(attempts) {
+  self.blockchain.multiOn('reconnect', function(attempts) {
     log.debug('Wallet:' + self.id + 'blockchain reconnect event');
     self.clearUnspentCache();
     self.emitAndKeepAlive('insightReconnected');
   });
 
-  self.blockchain.on('disconnect', function() {
+  self.blockchain.multiOn('disconnect', function() {
     log.debug('Wallet:' + self.id + 'blockchain disconnect event');
     self.emitAndKeepAlive('insightError');
   });
 
-  self.blockchain.on('tx', function(tx) {
-    log.debug('Wallet:' + self.id + ' blockchain tx event');
+  self.blockchain.multiOn('tx', function (tx) {
+    var text = 'Wallet:' + self.id + ' blockchain tx event';
+    log.debug(text);
     var addresses = self.getAddresses();
     // This should always be >=0
     if (_.indexOf(addresses, tx.address) >= 0) {
+      console.log(text);
       self.clearUnspentCache();
       self.emitAndKeepAlive('tx', tx.address, self.addressIsChange(tx.address));
     }
@@ -945,7 +947,7 @@ Wallet.prototype._setupBlockchainHandlers = function() {
     // transactions waiting for confirmation (ie confirmation < min confirmation)
     self.clearUnspentCache();
 
-    self.blockchain.on('block', self.emitAndKeepAlive.bind(self, 'balanceUpdated'));
+    self.blockchain.multiOn('block', self.emitAndKeepAlive.bind(self, 'balanceUpdated'));
   }
 }
 
@@ -954,10 +956,10 @@ Wallet.prototype._setupNetworkHandlers = function() {
 
   var net = this.network;
   net.removeAllListeners();
-  net.on('connect', self._onConnect.bind(self));
-  net.on('data', self._onData.bind(self));
-  net.on('no_messages', self._onNoMessages.bind(self));
-  net.on('connect_error', function() {
+  net.multiOn('connect', self._onConnect.bind(self));
+  net.multiOn('data', self._onData.bind(self));
+  net.multiOn('no_messages', self._onNoMessages.bind(self));
+  net.multiOn('connect_error', function() {
     self.emitAndKeepAlive('connectionError');
   });
 };

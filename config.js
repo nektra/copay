@@ -1,9 +1,9 @@
 'use strict';
 var defaultConfig = {
+  defaultLanguage: 'en',
   // DEFAULT network (livenet or testnet)
   networkName: 'testnet',
   logLevel: 'info',
-
 
   // wallet limits
   limits: {
@@ -53,46 +53,9 @@ var defaultConfig = {
 
   pluginsPath: __dirname + '/../sendcoin/copay_plugins/',
   plugins: {
-    //LocalStorage: true,
-    //    EncryptedLocalStorage: true,
-    //GoogleDrive: true,
-    //InsightStorage: true
-    //EncryptedInsightStorage: true,
     SendCoinStorage: true
   },
 
-  // This can be changed on the UX > Settings > Insight livenet
-  EncryptedInsightStorage: {
-    url: 'https://insight.bitpay.com:443/api/email',
-    //url: 'http://localhost:3001/api/email'
-
-    // This KDF parameters are for the passphrase for Insight authentication
-    // Are not related to encryption itself.
-    //
-    // WARN: Changing this parameters would prevent accesing previously created profiles.
-    iterations: 1000,
-    salt: 'jBbYTj8zTrOt6V',
-  },
-
-  minPasswordStrength: 4,
-
-  /*
-  GoogleDrive: {
-    home: 'copay',
-
-    
-    // This clientId was generated at:
-    // https://console.developers.google.com/project
-    // To run Copay with Google Drive at your domain you need
-    // to generata your own Id.
-    // for localhost:3001 you can use  you can:
-    //
-    clientId: '232630733383-a35gcnovnkgka94394i88gq60vtjb4af.apps.googleusercontent.com',
-
-    // for copay.io:
-    // clientId: '1036948132229-biqm3b8sirik9lt5rtvjo9kjjpotn4ac.apps.googleusercontent.com',
-  },
-  */
   minPasswordStrength: 4
 };
 if (typeof module !== 'undefined')
