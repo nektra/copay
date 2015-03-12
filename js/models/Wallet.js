@@ -429,7 +429,7 @@ Wallet.prototype._checkIfTxIsSent = function(ntxid, cb) {
   //Use calcHash NOT getHash which could be cached.
   var txid = bitcore.util.formatHashFull(tx.calcHash());
 
-  log.debug('Checking if transactions was broadcasted... ID:' + txid);
+  log.debug('Checking if transaction was broadcast... ID:' + txid);
 
   this.blockchain.getTransaction(txid, function(err, tx) {
     return cb(err, !err ? txid : null);
@@ -665,7 +665,10 @@ Wallet.prototype._onSeen = function(senderId, data) {
  */
 Wallet.prototype._onAddressBook = function(senderId, data) {
   if (!data.addressBook || !_.isObject(data.addressBook))
-    return;
+        return;
+    
+  
+  console.log("Wallet with ID " + this.id + " receives new address(es) from " + senderId);
 
   var self = this,
     hasChange;

@@ -232,7 +232,7 @@ Network.prototype._onMessage = function(enc) {
       this._addConnectedCopayer(payload.copayerId);
       break;
     default:
-      emitEventToAllHandlers(this.handlers, 'data', sender, payload, enc.ts);
+      this.multiEmit('data', sender, payload, enc.ts);
   }
 };
 
@@ -335,7 +335,7 @@ Network.prototype.start = function(opts, openCallback) {
   preconditions.checkState(this.connectedPeers && this.connectedPeers.length === 0);
 
   if (this.started) {
-    log.debug('Async: Networing already started for this wallet.')
+    log.debug('Async: Networking already started for this wallet.')
     return openCallback();
   }
 
