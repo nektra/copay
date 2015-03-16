@@ -83,3 +83,5 @@ dist/*.exe
 doc/
 /node_modules
 /*-cov
+
+.idea
