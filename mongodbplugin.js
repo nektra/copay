@@ -40,7 +40,7 @@ function MongoDbPlugin(config) {
     var ready = false;
     this.db = mongoose.connect('mongodb://localhost/copay', {}, function(){ ready = true; });
     
-    while(!ready)
+    while (!ready)
         deasync.runLoopOnce();
 
     this.keyValueSchema = mongoose.Schema({ key: String, value: String });

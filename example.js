@@ -1,4 +1,5 @@
 var repl = require('repl');
+var deasync = require('deasync');
 
 var scCfg = {
     //domain: 'https://localhost:3000',
@@ -27,11 +28,32 @@ var options = {
     failIfExists: true
 };
 
+process.stdin.resume();
+process.stdin.setEncoding('utf8');
+
+function takeInput(){
+    var ret = null;
+    process.stdin.on(
+        'data',
+        function (text) {
+            ret = text;
+        }
+    );
+    while (!ret)
+        deasync.runLoopOnce();
+    return ret;
+}
+
+console.log('Email: ');
+global.email = takeInput();
+console.log('Password: ');
+global.password = takeInput();
+
 var openCreateOptions = _.extend(
     options,
     {
-        email: 'foo@bar.com',
-        password: '123456'
+        email: global.email,
+        password: global.password
     }
 );
 
