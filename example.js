@@ -35,16 +35,14 @@ var openCreateOptions = _.extend(
     }
 );
 
-var anyItem = function (x){
-    return x[Object.keys(x)[0]];
-};
-
 var identity = null;
 global.convenience = {
     getIdentity: function (){
         return identity;
     },
-    anyItem: anyItem,
+    anyItem: function (x){
+        return x[Object.keys(x)[0]];
+    },
     spend: function (wallet, dest, satoshis){
         wallet.spend(
             {
@@ -68,13 +66,13 @@ global.convenience = {
         );
     },
     getAnyWallet: function(){
-        return anyItem(identity.wallets);
+        return this.anyItem(identity.wallets);
     }
 };
 
 var openCreateCallback = function (err, iden){
     if (err)
-        if (err === 1700){
+        if (err === 'notfound'){
             copay.Identity.create(
                 openCreateOptions,
                 openCreateCallback
@@ -83,8 +81,8 @@ var openCreateCallback = function (err, iden){
             console.log('Error opening/creating identity: ' + err);
     else{
         identity = iden;
+        identity.openWallets();
         var network = new async(options.network.testnet);
-        //var insight = new insight_mod();
         for (var i = 0; i < 10; i++) {
             var name = 'test' + i;
             var f = function (s) {

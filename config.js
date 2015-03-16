@@ -51,9 +51,9 @@ var defaultConfig = {
 
   verbose: 1,
 
-  pluginsPath: __dirname + '/../sendcoin/copay_plugins/',
+  pluginsPath: __dirname + '/',
   plugins: {
-    SendCoinStorage: true
+    mongodbplugin: true
   },
 
   minPasswordStrength: 4
