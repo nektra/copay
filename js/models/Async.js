@@ -1,6 +1,6 @@
 'use strict';
 
-var MultiEvent = require('../MultiEvent');
+var EventEmitter = require('events').EventEmitter;
 var bitcore = require('bitcore');
 var log = require('../util/log');
 var AuthMessage = bitcore.AuthMessage;
@@ -9,11 +9,13 @@ var nodeUtil = require('util');
 var extend = nodeUtil._extend;
 var io = require('socket.io-client');
 var preconditions = require('preconditions').singleton();
+var PhysicalNetwork = require('PhysicalNetwork').singleton;
+
+var network = PhysicalNetwork.getInstance();
 
 function Network(opts) {
   preconditions.checkArgument(opts);
   preconditions.checkArgument(opts.url);
-  MultiEvent.call(this);
   opts = opts || {};
   this.maxPeers = opts.maxPeers || 12;
   this.url = opts.url;
@@ -31,9 +33,10 @@ function Network(opts) {
   }
 }
 
-nodeUtil.inherits(Network, MultiEvent);
+nodeUtil.inherits(Network, EventEmitter);
 
 Network.prototype.cleanUp = function() {
+  var pubKey = this.getPubKey();
   this.started = false;
   this.connectedPeers = [];
   this.peerId = null;
@@ -44,16 +47,13 @@ Network.prototype.cleanUp = function() {
   this.isInboundPeerAuth = [];
   this.copayerForPeer = {};
   this.criticalErr = '';
-  if (this.socket) {
-    log.info('Async DISCONNECT');
-    this.socket.disconnect();
-    this.socket.removeAllListeners();
-    this.socket = null;
-  }
+  log.info('Async DISCONNECT');
+  network.cleanUp(pubKey);
   this.removeAllListeners();
+  this.emitEventToNetwork = null;
 };
 
-Network.parent = MultiEvent;
+Network.parent = EventEmitter;
 
 // Array helpers
 Network._inArray = function(el, array) {
@@ -107,11 +107,15 @@ Network.prototype._deletePeer = function(peerId) {
   this.connectedPeers = Network._arrayRemove(peerId, this.connectedPeers);
 };
 
-Network.prototype._addConnectedCopayer = function(copayerId) {
+Network.prototype._addCopayer = function(copayerId) {
   var peerId = this.peerFromCopayer(copayerId);
   this._addCopayerMap(peerId, copayerId);
   Network._arrayPushOnce(peerId, this.connectedPeers);
-  this.multiEmit('connect', copayerId);
+};
+
+Network.prototype._addConnectedCopayer = function(copayerId) {
+  this._addCopayer(copayerId);
+  this.emit('connect', copayerId);
 };
 
 Network.prototype.getKey = function() {
@@ -123,6 +127,10 @@ Network.prototype.getKey = function() {
     this.key = key;
   }
   return this.key;
+};
+
+Network.prototype.getPubKey = function() {
+  return this.getKey().public.toString('hex');
 };
 
 //hex version of one's own nonce
@@ -232,60 +240,8 @@ Network.prototype._onMessage = function(enc) {
       this._addConnectedCopayer(payload.copayerId);
       break;
     default:
-      this.multiEmit('data', sender, payload, enc.ts);
+      this.emit('data', sender, payload, enc.ts);
   }
-};
-
-Network.prototype._setupSocketHandlers = function(opts, cb) {
-  preconditions.checkState(this.socket);
-  log.debug('setting up connection', opts);
-  var self = this;
-
-  self.socket.on('connect_error', function(m) {
-
-    // If socket is not started, destroy it and emit and error
-    // If it is started, socket.io will try to reconnect. 
-    if (!self.started) {
-      self.multiEmit('connect_error');
-      self.cleanUp();
-    }
-  });
-
-  self.socket.on('subscribed', function(m) {
-    var fromTs = opts.syncedTimestamp || 0;
-
-    // We ask for this message, and then ignore it, only to see if the
-    // server has erased our old messages.
-    
-    if (fromTs) {
-      self.ignoreMessageFromTs = fromTs;
-    }
-    log.info('Async: synchronizing from: ', fromTs);
-    self.multiEmit('sync', fromTs);
-    self.started = true;
-  });
-
-
-  self.socket.on('message', function(m) {
-    // delay execution, to improve error handling
-    setTimeout(function() {
-      self._onMessage(m);
-    }, 1);
-  });
-  self.socket.on('error', self._onError.bind(self));
-
-  self.socket.on('no_messages', self.emit.bind(self, 'no_messages'));
-  self.socket.on('connect', function() {
-    var pubkey = self.getKey().public.toString('hex');
-    log.debug('Async subscribing to pubkey:', pubkey);
-
-    self.socket.emit('subscribe', pubkey);
-
-    self.socket.on('disconnect', function() {
-      self.socket.emit('subscribe', pubkey);
-    });
-    if (typeof cb === 'function') cb();
-  });
 };
 
 Network.prototype._onError = function(err) {
@@ -332,7 +288,6 @@ Network.prototype.start = function(opts, openCallback) {
   preconditions.checkArgument(opts);
   preconditions.checkArgument(opts.privkey);
   preconditions.checkArgument(opts.copayerId);
-  preconditions.checkState(this.connectedPeers && this.connectedPeers.length === 0);
 
   if (this.started) {
     log.debug('Async: Networking already started for this wallet.')
@@ -343,21 +298,58 @@ Network.prototype.start = function(opts, openCallback) {
   this.setCopayerId(opts.copayerId);
   this.maxPeers = opts.maxPeers || this.maxPeers;
 
-  this.socket = this.createSocket();
-  this._setupSocketHandlers(opts, openCallback);
-};
+  var pubKey = this.getPubKey();
+  this.emitEventToNetwork = network.send.bind(network, pubKey);
+  
+  network.registerAsync(
+    pubKey,
+    {
+      'connect_error': function (){
+        // If socket is not started, destroy it and emit an error
+        // If it is started, socket.io will try to reconnect. 
+        if (!self.started) {
+          self.emit('connect_error');
+          self.cleanUp();
+        }
+      },
+      'subscribed': function (){
+        var fromTs = opts.syncedTimestamp || 0;
 
-Network.prototype.createSocket = function() {
-  log.debug('Async: Connecting to socket:', this.url);
-  return io.connect(this.url, this.socketOptions);
+        // We ask for this message, and then ignore it, only to see if the
+        // server has erased our old messages.
+        
+        if (fromTs)
+          self.ignoreMessageFromTs = fromTs;
+        log.info('Async: synchronizing from: ', fromTs);
+        self.emitEventToNetwork('sync', fromTs);
+        self.started = true;
+      },
+      'error': self._onError.bind(self),
+      'no_messages': self.emit.bind(self, 'no_messages'),
+      'no messages': self.emit.bind(self, 'no_messages'),
+      'connect': function (){
+        var pubkey = self.getPubKey();
+        log.debug('Async subscribing to pubkey:', pubkey);
+        
+        self.emitEventToNetwork('subscribe', pubkey);
+        
+        self.registerAsyncCallback(
+          pubkey,
+          'disconnect',
+          function() {
+            self.emitEventToNetwork('subscribe', pubkey);
+          }
+        );
+        if (typeof openCallback === 'function')
+          openCallback();
+      }
+    }
+  );
+  network.startNetwork(pubKey, this.url, this.socketOptions);
 };
 
 Network.prototype.getOnlinePeerIDs = function() {
   return this.connectedPeers;
-};
-
-Network.prototype.getPeer = function() {
-  return this.peer;
 };
 
 
@@ -375,7 +367,6 @@ Network.prototype.getCopayerIds = function() {
 
 
 Network.prototype.send = function(dest, payload, cb) {
-  preconditions.checkState(this.socket);
   preconditions.checkArgument(payload);
 
   var self = this;
@@ -389,13 +380,14 @@ Network.prototype.send = function(dest, payload, cb) {
 
   var l = dest.length;
   var i = 0;
+
   for (var ii in dest) {
     var to = dest[ii];
     if (to == this.copayerId)
       continue;
 
     var message = this.encode(to, payload);
-    this.socket.emit('message', message);
+    self.emitEventToNetwork('message', message);
   }
 
   if (typeof cb === 'function') cb();
@@ -413,7 +405,7 @@ Network.prototype.encode = function(copayerId, payload, nonce) {
 };
 
 Network.prototype.isOnline = function() {
-  return !!this.socket;
+  return network.isConnected(this.getPubKey());
 };
 
 
@@ -421,6 +413,12 @@ Network.prototype.lockIncommingConnections = function(allowedCopayerIdsArray) {
   this.allowedCopayerIds = {};
   for (var i in allowedCopayerIdsArray) {
     this.allowedCopayerIds[allowedCopayerIdsArray[i]] = true;
+  }
+};
+
+Network.prototype.setCopayers = function(copayersIdsArray) {
+  for (var i in copayersIdsArray) {
+    this._addCopayer(copayersIdsArray[i]);
   }
 };
 
